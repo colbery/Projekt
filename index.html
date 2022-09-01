@@ -7,7 +7,7 @@
       name="viewport"
       content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"
     />
-    <link type="text/css" rel="stylesheet" href="./examples/main.css" />
+    <link type="text/css" rel="stylesheet" href="./pliki/main.css" />
   </head>
   <body>
     <div id="container"></div>
@@ -28,32 +28,24 @@
     <script type="module">
       import * as THREE from "three";
 
-      import { OrbitControls } from "./examples/jsm/controls/OrbitControls.js";
-      import { Water } from "./examples/jsm/objects/Water.js";
-      import { Sky } from "./examples/jsm/objects/Sky.js";
+      import { OrbitControls } from "./pliki/js/controls/OrbitControls.js";
+      import { Water } from "./pliki/js/objects/Water.js";
+      import { Sky } from "./pliki/js/objects/Sky.js";
 
-      let container;
-      let camera, scene, renderer;
-      let controls, water, sun, mesh;
-
-      init();
-      animate();
+      var container;
+      var camera, scene, renderer;
+      var controls, water, sun, group, icosahedron, dodecahedron, cylinder;
 
       function init() {
         container = document.getElementById("container");
-
-        //
-
         renderer = new THREE.WebGLRenderer();
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
         container.appendChild(renderer.domElement);
 
-        //
-
         scene = new THREE.Scene();
-
         camera = new THREE.PerspectiveCamera(
           55,
           window.innerWidth / window.innerHeight,
@@ -62,32 +54,26 @@
         );
         camera.position.set(30, 30, 100);
 
-        //
-
         sun = new THREE.Vector3();
 
         // Water
-
         const waterGeometry = new THREE.PlaneGeometry(10000, 10000);
 
         water = new Water(waterGeometry, {
           textureWidth: 512,
           textureHeight: 512,
           waterNormals: new THREE.TextureLoader().load(
-            "./examples/textures/waternormals.jpg",
+            "./pliki/textures/waternormals3.jpg",
             function (texture) {
               texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
             }
           ),
           sunDirection: new THREE.Vector3(),
-          sunColor: 0xff0000,
-          waterColor: 0xadd8e6,
-          distortionScale: 3.7,
-          fog: scene.fog !== undefined,
+          waterColor: 0x0044ff,
+          distortionScale: 2,
         });
 
         water.rotation.x = -Math.PI / 2;
-
         scene.add(water);
 
         // Skybox
@@ -103,49 +89,44 @@
         skyUniforms["mieCoefficient"].value = 0.005;
         skyUniforms["mieDirectionalG"].value = 0.8;
 
-        const parameters = {
-          elevation: 1,
-          azimuth: 180,
-        };
-
         const pmremGenerator = new THREE.PMREMGenerator(renderer);
-        let renderTarget;
 
-        function updateSun() {
-          const phi = THREE.MathUtils.degToRad(90 - parameters.elevation);
-          const theta = THREE.MathUtils.degToRad(parameters.azimuth);
+        const phi = THREE.MathUtils.degToRad(88);
+        const theta = THREE.MathUtils.degToRad(180);
 
-          sun.setFromSphericalCoords(1, phi, theta);
+        sun.setFromSphericalCoords(1, phi, theta);
 
-          sky.material.uniforms["sunPosition"].value.copy(sun);
-          water.material.uniforms["sunDirection"].value.copy(sun).normalize();
+        sky.material.uniforms["sunPosition"].value.copy(sun);
+        const renderTarget = pmremGenerator.fromScene(sky);
 
-          if (renderTarget !== undefined) renderTarget.dispose();
-
-          renderTarget = pmremGenerator.fromScene(sky);
-
-          scene.environment = renderTarget.texture;
-        }
-
-        updateSun();
-
-        //
+        scene.environment = renderTarget.texture;
 
         const radius = 20;
-        const geometry = new THREE.IcosahedronBufferGeometry(radius);
-        const material = new THREE.MeshStandardMaterial({ roughness: 0 });
 
-        mesh = new THREE.Mesh(geometry, material);
-        scene.add(mesh);
+        group = new THREE.Group();
+        scene.add(group);
 
-        //
+        icosahedron = new THREE.Mesh(
+          new THREE.IcosahedronGeometry(radius),
+          new THREE.MeshStandardMaterial({ color: 0xff0000, roughness: 0 })
+        );
+        group.add(icosahedron);
 
-        controls = new OrbitControls(camera, renderer.domElement);
-        controls.maxPolarAngle = Math.PI * 0.495;
-        controls.target.set(0, 10, 0);
-        controls.minDistance = 40.0;
-        controls.maxDistance = 200.0;
-        controls.update();
+        dodecahedron = new THREE.Mesh(
+          new THREE.DodecahedronGeometry(radius),
+          new THREE.MeshStandardMaterial({ color: 0x00aa00, roughness: 0 })
+        );
+        // dodecahedron.position.z = -300
+
+        cylinder = new THREE.Mesh(
+          new THREE.CylinderGeometry(5, 5, 20, 32),
+          new THREE.MeshStandardMaterial({ color: 0xff00ff, roughness: 0 })
+        );
+        cylinder.scale.set(2, 5, 2);
+        cylinder.position.set(150, 0, -90);
+
+        scene.add(cylinder);
+        group.add(dodecahedron);
 
         window.addEventListener("resize", onWindowResize);
       }
@@ -163,16 +144,21 @@
       }
 
       function render() {
-        const time = performance.now() * 0.002;
+        const time = performance.now() * 0.001;
 
-        mesh.position.y = Math.sin(time) * 20 + 5;
-        mesh.rotation.x = time * 0.5;
-        mesh.rotation.z = Math.sin(time) * 1 + 5;
+        group.position.y = 2 * Math.sin(time);
+        group.rotation.reorder("YXZ");
+        dodecahedron.rotation.set(Math.PI * 0.25, time * 0.2, 0);
+        dodecahedron.position.set(300 - time * 10, 0, -200 - time * 5);
+        icosahedron.rotation.set(Math.PI * 0.25, time * 0.25, 0);
 
         water.material.uniforms["time"].value += 1.0 / 60.0;
 
         renderer.render(scene, camera);
       }
+
+      init();
+      animate();
     </script>
   </body>
 </html>
